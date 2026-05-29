@@ -219,3 +219,103 @@ CMD ["./main"]
 | **인프라 구축** | 필요 없음 (로컬에서 끝) | 🛠️ ARM 서버 추가 구축 필요 | 필요 없음 (Dockerfile만 수정) |
 | **언어 제약** | 없음 (모든 언어 가능) | 없음 (모든 언어 가능) | ⚠️ Go, Rust 등 컴파일 언어 위주 |
 
+
+## 깃허브 액션 - 멀티 아키텍처 이미지 빌드하기 ##
+GitHub Actions에서 에뮬레이터(QEMU) 없이 100% 네이티브 속도로 멀티 아키텍처 이미지를 빌드하려면, GitHub Actions가 돌아가는 기본 주자(x86_64) 외에 **ARM64 전용 자체 호스트 주자(Self-hosted Runner)**를 파이프라인에 함께 엮어야 합니다.
+이를 구현하는 가장 세련된 방법은 GitHub Actions의 행렬(Matrix) 빌드를 활용하는 것입니다. x86 노드와 ARM64 노드에서 각각 이미지를 네이티브하게 빌드하여 ECR로 푸시한 뒤, 마지막 단계에서 두 이미지를 하나의 매니페스트 리스트(Manifest List)로 묶어주는 방식입니다.
+AWS 환경(EC2 또는 AWS CodeBuild ephemeral runner)에 x86_64 주자와 ARM64 주자가 각각 준비되어 있다고 가정하고 작성된 실전 워크플로우 스크립트입니다.
+🛠️ GitHub Actions 네이티브 멀티 아키텍처 빌드 스크립트 (.github/workflows/native-multi-arch.yml)
+
+```
+name: Native Multi-Architecture Build
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  AWS_REGION: ap-northeast-2
+  ECR_REPOSITORY: my-eks-app
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  # 1단계: 각 아키텍처별 환경에서 네이티브 빌드 후 개별 태그로 푸시
+  build-native:
+    name: Build Native Image
+    runs-on: ${{ matrix.runner-os }}
+    strategy:
+      matrix:
+        # self-hosted 레이블은 각각 x86_64와 ARM64 가상머신에 매핑되어 있어야 합니다.
+        include:
+          - runner-os: [self-hosted, linux, x64]
+            arch: amd64
+          - runner-os: [self-hosted, linux, arm64]
+            arch: arm64
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    # QEMU 설정 단계가 없으므로 해당 장비의 CPU를 그대로 사용하는 100% 네이티브 빌드입니다.
+    - name: Build and Push Architecture-Specific Image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/${{ matrix.arch }}
+        push: true
+        tags: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}-${{ matrix.arch }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # 2단계: 개별 아키텍처 이미지를 하나의 멀티 아키텍처 매니페스트로 결합
+  create-manifest:
+    name: Create Multi-Arch Manifest
+    needs: build-native
+    runs-on: ubuntu-latest # 매니페스트 결합은 메타데이터 작업이라 아무 호스트에서나 해도 빠릅니다.
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    # docker buildx imagetools 명령을 사용하여 이미 푸시된 두 이미지를 하나의 태그로 묶어줍니다.
+    - name: Create and Push Manifest List
+      run: |
+        REGISTRY=${{ steps.login-ecr.outputs.registry }}
+        REPO=${{ env.ECR_REPOSITORY }}
+        TAG=${{ env.IMAGE_TAG }}
+        
+        docker buildx imagetools create -t $REGISTRY/$REPO:$TAG \
+          $REGISTRY/$REPO:${TAG}-amd64 \
+          $REGISTRY/$REPO:${TAG}-arm64
+```
+
+파이프라인 작동 메커니즘 설명
+	1.	matrix를 통한 병렬 처리: build-native 작업이 시작되면 x86 주자와 ARM64 주자에서 각각 독립적으로 빌드가 동시에 돌아갑니다. 에뮬레이터 오버헤드가 전혀 없기 때문에 각 아키텍처의 최대 속도로 빌드가 완료됩니다.
+	2.	임시 태그 푸시: x86 장비는 빌드 후 이미지 뒤에 -amd64를 붙여서 ECR에 올리고, ARM64 장비는 -arm64를 붙여서 올립니다.
+	3.	docker buildx imagetools create (핵심): 마지막 create-manifest 단계에서 ECR에 이미 올라가 있는 두 개별 이미지의 매니페스트를 다운받아, 하나의 통합 태그(${{ env.IMAGE_TAG }})를 가진 **매니페스트 리스트(Manifest List)**로 재조립하여 ECR에 최종 배포합니다.
+이 방식을 쓰면 대규모 프로젝트나 무거운 의존성을 가진 어플리케이션도 CI/CD 빌드 타임을 x86 단독 빌드 수준으로 극적으로 유지할 수 있습니다! 
+
