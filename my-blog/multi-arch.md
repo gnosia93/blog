@@ -1,4 +1,4 @@
-### AWS Graviton 도입을 위한 EKS 멀티 아키텍처 컨테이너 이미지 빌드 가이드 ###
+## AWS Graviton 도입을 위한 EKS 멀티 아키텍처 컨테이너 이미지 빌드 가이드 ##
 
 최근 인프라 비용 절감과 성능 향상을 위해 AWS EKS(Elastic Kubernetes Service)에서 ARM64 기반의 AWS Graviton 인스턴스를 도입하는 기업이 급격히 늘고 있습니다.
 Graviton은 기존 x86 인스턴스 대비 최대 40%의 가성비 향상을 제공하지만, 이를 EKS에 성공적으로 적용하려면 한 가지 큰 장벽을 넘어야 합니다.
@@ -8,11 +8,15 @@ Graviton은 기존 x86 인스턴스 대비 최대 40%의 가성비 향상을 제
 
 이 블로그 포스트에서는 Docker의 Buildx와 **AWS 가상 환경(GitHub Actions / 로컬)**을 활용하여 EKS에서 완벽하게 동작하는 멀티 아키텍처 이미지를 빌드하고 Amazon ECR에 배포하는 방법을 알아보겠습니다.
 
-```
-1. 멀티 아키텍처 이미지의 작동 원리: Manifest란?
+
+### 1. 멀티 아키텍처 이미지란? ###
+
+_그림추가_
+
 Docker에서 멀티 아키텍처 이미지는 두 아키텍처의 바이너리를 한 파일에 뭉쳐놓은 것이 아닙니다. AMD64용 이미지와 ARM64용 이미지를 각각 빌드한 뒤, 이를 하나의 **매니페스트 리스트(Manifest List)**로 묶어주는 개념입니다.
 EKS 노드가 이미지를 풀(Pull)할 때, 컨테이너 런타임(containerd)이 노드의 아키텍처(예: linux/amd64 또는 linux/arm64)를 확인하고, 매니페스트 리스트를 참조하여 해당 노드에 맞는 정확한 레이어만 다운로드합니다. 따라서 개발자나 배포 매니페스트(YAML) 입장에서는 기존과 동일하게 단 하나의 이미지 태그만 관리하면 됩니다.
-2. Docker Buildx 준비하기
+
+### 2. Docker Buildx 준비하기 ###
 멀티 아키텍처 빌드를 가장 편하게 수행할 수 있는 도구는 Docker 공식 확장 기능인 Buildx입니다. Buildx는 내부적으로 툴킷인 BuildKit을 사용하며, QEMU 에뮬레이터를 통해 로컬 환경(예: Intel 맥북 또는 Windows PC)에서도 ARM64 이미지를 교차 빌드(Cross-compile)할 수 있게 해줍니다.
 로컬 환경 설정 (Linux / macOS 기준)
 	1.	Docker 빌더 상태 확인 및 QEMU 에뮬레이터 설치
