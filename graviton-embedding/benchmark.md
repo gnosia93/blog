@@ -167,7 +167,9 @@ os.environ["OMP_NUM_THREADS"] = "4"
 os.environ["MKL_NUM_THREADS"] = "4"
 ```
 
-
+지금 진행하시는 문장 임베딩(SentenceTransformer) 코드 테스트에서는 단일 배치 연산의 효율이 중요하므로 아래와 같이 세팅하는 것이 정석입니다.
+•	torch.set_num_threads(4): 현재 할당된 vCPU나 물리 코어 수(예: 4 또는 8)에 맞춰 유연하게 조절해가며 Latency 최적점을 찾습니다.
+•	torch.set_num_interop_threads(1): 별도의 비동기 병렬 파이프라인을 구축한 게 아니라면 오버헤드를 줄이기 위해 기본값 혹은 1로 고정해 두는 것이 일반적입니다.
 
 
 
