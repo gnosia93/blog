@@ -22,3 +22,18 @@ print(model[0].auto_model)
 
 # 3. 모델 내부의 실제 트랜스포머 레이어(Encoder) 개수 출력
 print("트랜스포머 레이어 개수: ", len(model[0].auto_model.encoder.layer))
+
+# 4. TORCH_CPU_BACKEND 를 onednn 으로 설정
+
+import os
+import torch
+import time
+from sentence_transformers import SentenceTransformer
+
+# ⚠️ 반드시 최상단에 위치해야 합니다! (PyTorch가 로드되기 전에 환경 변수를 읽어야 하므로)
+os.environ["TORCH_CPU_BACKEND"] = "onednn"
+
+# ... 이후 벤치마크 코드 작성
+print("현재 가동 중인 CPU 백엔드 백엔드:", torch.backends.cpu.get_cpu_capability())
+# AARCH64 (또는 아주 기본적인 기능명만 출력)
+# 출력 결과 예시: ONEDNN
