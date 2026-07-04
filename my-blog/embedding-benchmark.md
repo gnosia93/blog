@@ -72,6 +72,21 @@ model = SentenceTransformer('BAAI/bge-m3')
 # 2. 모델 구조 출력!
 print(model)
 ```
+출력 결과 창에 찍히는 내용 (bge-m3 기준 파싱):
+```
+SentenceTransformer(
+  (0): Transformer({'max_seq_length': 8192, 'do_lower_case': False}) with Transformer model: XLMRobertaModel 
+  (1): Pooling({'word_embedding_dimension': 1024, ...})
+)
+```
+여기서 핵심 알맹이인 XLMRobertaModel을 더 깊게 뜯어보거나, Hugging Face 공식 도큐먼트의 config.json 파일을 열어보면 이 모델의 진짜 층수가 나옵니다.
+
+#### 2. 우리가 비교하려는 모델들의 실제 층수 (스펙 비교) ####
+실제 실무에서 많이 쓰는 모델들의 트랜스포머 층수를 비교해 보면 확연한 체급 차이가 보입니다.
+*	jhgan/ko-sroberta-multitask (경량): 12층 (기본 BERT-base 아키텍처)
+*	BAAI/bge-m3 (중형/우리가 쓸 것): 24층 (XLMRoberta-large 기반 아키텍처)
+*	Qwen/Qwen3-Embedding-8B (대형): 32층 (Llama 계열의 대형 LLM 기반 아키텍처)
+
 
 
 ### 3. 실전 벤치마크 스크립트 (Python) ###
