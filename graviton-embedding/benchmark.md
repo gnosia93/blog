@@ -91,56 +91,8 @@ SentenceTransformer(
 
 ### 3. 실전 벤치마크 스크립트 (Python) ###
 두 서버에 각각 아래 코드를 올린 뒤 실행하여 **"초당 몇 개의 문장을 처리하는지(Throughput)"**와 **"문장 1개당 몇 ms가 걸리는지(Latency)"**를 측정합니다.
-```
-import time
-import numpy as np
-from sentence_transformers import SentenceTransformer
 
-# 1. BGE-M3 모델 로드 (CPU 명시)
-print("Loading BAAI/bge-m3 model on CPU...")
-model = SentenceTransformer('BAAI/bge-m3', device='cpu')
-
-# 2. 더미 데이터 세팅 (실전 시나리오 반영)
-# 시나리오 A: 유저가 던지는 짧은 검색 쿼리 (평균 15단어)
-short_texts = ["최신 AWS 그라비톤 프로세서의 L3 캐시 메모리 아키텍처와 대역폭 효율성 조사"] * 100
-
-# 시나리오 B: RAG 엔진에 들어갈 긴 컨텍스트 문서 조각 (평균 300단어)
-long_text_chunk = """
-AWS Graviton3 프로세서는 클라우드 워크로드를 위해 Amazon에서 맞춤 설계한 64비트 ARM 기반 칩셋입니다. 
-기존 2세대 그라비톤에 비해 뛰어난 컴퓨터 연산 성능과 2배 더 넓은 DDR5 메모리 대역폭을 제공합니다. 
-특히 대규모 트랜스포머 기반 임베딩 연산 시, 수많은 물리 코어가 격자 구조(Mesh Network)로 연결되어 
-L3 캐시 풀에 균일하고 빠르게 접근할 수 있어 인덱싱 작업의 병목을 크게 해소합니다. 
-하이퍼스레딩 없이 독립된 물리 코어 성능을 보장하므로 자바 가상 머신(JVM)의 가비지 컬렉션(GC) 성능 및 
-문장 임베딩 벡터 생성 시 일관된 꼬리 지연 시간(Tail Latency) 보장에 압도적인 효율을 자랑합니다.
-"""
-long_texts = [long_text_chunk] * 50  # 연산량이 크므로 50개만 진행
-
-def run_benchmark(name, text_list, batch_size=1):
-    print(f"\n=== {name} 벤치마크 시작 (Batch Size: {batch_size}) ===")
-    
-    # 워밍업 (Warming up: 초기에 캐시나 라이브러리 로드 시간 제외 목적)
-    model.encode(text_list[:2], batch_size=batch_size, normalize_embeddings=True)
-    
-    # 본 측정
-    start_time = time.perf_counter()
-    embeddings = model.encode(text_list, batch_size=batch_size, normalize_embeddings=True)
-    end_time = time.perf_counter()
-    
-    total_time = end_time - start_time
-    avg_latency = (total_time / len(text_list)) * 1000 # ms 단위
-    throughput = len(text_list) / total_time
-    
-    print(f"총 소요 시간: {total_time:.4f} 초")
-    print(f"문장 1개당 평균 지연 시간(Latency): {avg_latency:.2f} ms")
-    print(f"초당 처리 문장 수(Throughput): {throughput:.2f} sentences/sec")
-    return avg_latency, throughput
-
-# 실행 (배치 크기를 1과 8로 각각 테스트하여 하드웨어 효율 측정)
-run_benchmark("짧은 문장 쿼리 (Batch 1)", short_texts, batch_size=1)
-run_benchmark("짧은 문장 쿼리 (Batch 8)", short_texts, batch_size=8)
-run_benchmark("긴 문서 청크 (Batch 1)", long_texts, batch_size=1)
-run_benchmark("긴 문서 청크 (Batch 8)", long_texts, batch_size=8)
-```
+* https://github.com/gnosia93/blog/blob/main/graviton-embedding/bench/embedding-bench.py
 
 [결과]
 ```
