@@ -6,6 +6,7 @@
 ### 1. aws CLI 설치 ##
 ```
 brew install awscli
+aws --version
 ```
 
 ### 2. EC2 세션 매니저 설치 ###
