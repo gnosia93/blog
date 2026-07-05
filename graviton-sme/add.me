@@ -36,3 +36,43 @@ Graviton5에 SME가 없으니 FP32 행렬 가속 경로가 없고, 그래서 님
 진짜 공정한 비교는 같은 dtype끼리, 또는 같은 품질 기준으로 속도 비교
 FP32 행렬 가속을 원하면 그건 SME 영역이고, 그건 Intel 서버칩에도 아직 없음
 혹시 지금 Intel 쪽 벤치가 어떤 인스턴스/타입이었는지 알려주시면, FP32끼리 또는 BF16끼리 진짜 동급 조건으로 비교 설계를 잡아드릴게요. 그래야 c9g가 실제로 어느 급인지 정확히 나옵니다.
+
+---
+
+sentence tranfomer 를 그냥 돌리면.. 인텔이 더 빨라서 그러는거야..
+
+Kiro
+
+Thought complete
+The user observed that Intel runs sentence-transformers faster by default, and they're investigating whether Graviton can match that performance. The reason Intel has the advantage is that default sentence-transformers uses PyTorch with FP32 precision, and PyTorch on x86 benefits from highly optimized MKL and oneAPI libraries that have been refined over years. On ARM, the default FP32 path relies on OpenBLAS and oneDNN with ACL, which historically hasn't been as optimized, and crucially, ARM lacks dedicated FP32 matrix acceleration hardware—it depends on SVE FMA instead. Intel's AVX-512 FMA throughput combined with higher clock speeds typically outperforms ARM in raw FP32 workloads. The key insight is that the "just run it" comparison defaults to exactly the tier where ARM's matrix acceleration advantages don't apply and Intel's mature x86 stack shines. Graviton's real edge emerges with BF16 and INT8 precision, plus its cost-per-hour advantage often makes it more attractive on price-per-embedding metrics even if raw latency favors Intel.
+네, 그 관찰이 맞습니다. 기본 설정(FP32)으로 그냥 돌리면 Intel이 더 빠른 경우가 흔합니다. 이건 이상한 게 아니라 예상되는 결과예요. 이유를 정확히 짚어드릴게요.
+
+왜 "그냥 돌리면" Intel이 이기나
+1) 기본값이 FP32라서 sentence-transformers를 옵션 없이 돌리면 PyTorch FP32입니다. 그런데 FP32 행렬곱은 앞서 말했듯 양쪽 다 행렬 가속 유닛을 안 씁니다. 순수하게 벡터 FMA 처리량 싸움이 됩니다.
+
+2) 그 싸움에서 Intel이 유리함
+
+Intel AVX-512는 FP32 16레인 + 높은 클럭으로 FP32 벡터 처리량이 강합니다.
+x86 PyTorch는 MKL/oneDNN이 수년간 극도로 튜닝돼 있습니다.
+반면 ARM은 FP32 전용 행렬 가속이 없고(SVE FMA에 의존), FP32 경로의 소프트웨어 성숙도도 x86만큼은 아닙니다.
+3) 그래서 FP32 = ARM이 가장 불리한 조건 Graviton의 강점(BF16/INT8 matmul, 가격대성능)이 하나도 안 켜진 상태로 붙는 거라, 질 수밖에 없는 링에서 싸운 셈입니다.
+
+즉 지금 상황을 한 줄로
+"그냥 돌림" = FP32 = ARM이 제일 불리한 조건에서 Intel과 붙은 것 Graviton은 여기서 이기라고 만든 칩이 아님
+
+Graviton이 반격하는 지점
+BF16으로 전환 → BFMMLA 행렬 가속 ON. FP32 대비 크게 뛰고, Intel과의 격차가 좁혀지거나 역전될 수 있음 (품질은 거의 유지)
+가격대성능 → Graviton 인스턴스가 대체로 시간당 단가가 쌉니다. "초당 문장 수"에선 져도 "1달러당 문장 수"에선 이기는 경우가 많음. 임베딩 배치 처리처럼 대량이면 이게 실질 지표.
+그래서 솔직한 정리
+목표가 "순수 FP32 최고 속도" → Intel(특히 AVX-512, AMX 있는 Sapphire Rapids+)이 유리한 게 맞습니다. 억지로 Graviton 쓸 이유 약함.
+목표가 "같은 품질을 싸게 대량 처리" → BF16 + 가격 고려하면 Graviton이 경쟁력 있음.
+목표가 "지연시간 최소"이고 정밀도 유연 → GPU/Neuron이 임베딩엔 훨씬 강함.
+확인해볼 것
+지금 비교하신 Intel 인스턴스가 뭔지 알려주시면(예: c7i, m7i 등 세대), 공정하게:
+
+양쪽 FP32 (지금 상태 — Intel 우세 예상)
+양쪽 BF16 (Graviton 반격 조건)
+시간당 단가로 나눈 가격대성능
+이 세 축으로 비교표를 잡아드릴게요. 그래야 "Intel이 빠르다"가 어느 조건에서 참이고 어느 조건에서 뒤집히는지 명확해집니다.
+
+혹시 이 임베딩이 실시간 서빙인지 배치 인덱싱인지도 알려주시면, 거기 맞는 답(속도 우선 vs 비용 우선)을 더 좁혀드릴 수 있어요.
