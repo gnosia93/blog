@@ -55,3 +55,26 @@ aws iam add-role-to-instance-profile \
 ```
 aws iam get-instance-profile --instance-profile-name EC2-SSM-Profile
 ```
+
+#### 5. EC2 인스턴스 생성 ####
+* 지원여부 조회
+```
+aws ec2 describe-instance-type-offerings \
+  --location-type region \
+  --filters "Name=instance-type,Values=c9g.2xlarge" \
+```
+* 생성하기
+```
+AMI_ID=$(aws ssm get-parameter \
+  --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64 \
+  --query "Parameter.Value" --output text)
+echo "AMI ID: ${AMI_ID}"
+
+aws ec2 run-instances \
+  --image-id "$AMI_ID" \
+  --instance-type c9g.2xlarge \
+  --iam-instance-profile Name=EC2-SSM-Profile \
+  --subnet-id subnet-xxxxxxxx \
+  --security-group-ids sg-xxxxxxxx \
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=graviton-c9g}]'
+```
