@@ -185,3 +185,54 @@ CPU면: BF16은 최신 하드웨어(AMX/Graviton)에서 뜨는 중이지 아직 
 즉 님이 CPU에서 FP32로 돌리고 있던 건 "잘못"이 아니라 가장 흔한 기본 상태입니다. BF16은 c9g/AMX 같은 새 하드웨어의 가속을 끌어내려고 "일부러 켜는" 옵션이고, 아직 업계 디폴트까진 아니에요.
 
 혹시 이걸 프로덕션 서빙에 쓸 계획이면, CPU BF16보다 GPU FP16 서빙이나 전용 임베딩 서버(TEI) 쪽이 더 검증된 길입니다. 반대로 비용 최적화된 대량 배치가 목적이면 Graviton BF16이 실험해볼 가치가 있고요. 용도가 어느 쪽인지 알려주시면 현실적인 선택지를 좁혀드릴게요.
+
+---
+
+쩝.. 근데 왜 meta 는. 그라비톤 9을 agentic ai 에 그렇게 많이 쓴다고 했을가?
+
+Kiro
+
+Thought complete
+The user is asking about Meta's specific claims regarding their use of Graviton processors for agentic AI workloads, likely referencing an announcement around the C9g/Graviton5 launch. I need to search for what Meta actually said about this to verify the claim and understand their reasoning.
+좋은 질문이고, 이건 제가 추측으로 답하기보단 실제로 뭐라고 했는지 확인하는 게 맞겠네요. 검색해볼게요.
+
+
+2 tool calls
+web_search
+web_search
+
+Thought complete
+I see the distinction now—Meta's Graviton5 is optimized for agentic AI workloads, which involve orchestration and multi-step reasoning rather than the heavy matrix multiplication that embedding inference requires. This clarifies why the user might have been disappointed expecting it to excel at embedding tasks when that's not what it's designed for. Each Graviton5 has 192 cores optimized for high concurrency and data movement rather than raw matrix throughput — perfect for orchestrating multiple agent tasks simultaneously. Companies like Uber and Snowflake are already deploying Graviton for agentic workloads, which makes sense because the bottleneck in agent coordination is coordination itself, not single-model inference speed. The user's embedding benchmark actually tests the wrong workload profile — embeddings are matrix-bound (GPU territory), while agentic orchestration is concurrency-bound (CPU territory where Graviton excels).
+찾아보니 오해가 하나 풀립니다. Meta가 Graviton을 쓰는 이유는 임베딩 같은 행렬 연산 때문이 아니라, 완전히 다른 종류의 일 때문이에요. 님이 벤치한 워크로드(임베딩)로는 이 강점이 안 드러납니다.
+
+먼저 용어 정리: "그라비톤 9"는 Graviton5 칩이고, 그게 들어간 인스턴스가 c9g/m9g입니다(세대 번호가 9).
+
+Meta가 실제로 한 말
+Meta가 agentic AI를 위해 수천만 개 코어 규모의 Graviton5 배포에 서명했습니다 (About Amazon, 라이선스 준수 위해 재구성함). Uber, Snowflake도 agentic 워크로드에 Graviton 도입 중.
+Meta 측 표현을 요약하면: agentic AI가 발전하면서 CPU 수요가 늘고 있고, 어떤 단일 칩 아키텍처도 모든 워크로드를 효율적으로 감당하진 못한다는 포트폴리오 관점 (Meta 뉴스룸, 재구성함).
+중요한 포인트 하나: 이 칩들은 AI 가속기가 아니다라고 명시됩니다 (The Next Web, 재구성함).
+핵심: agentic AI의 CPU 부하는 "행렬 연산"이 아님
+여기가 님 혼란의 해소 지점입니다. agentic AI에서 CPU가 하는 일은:
+
+실시간 추론(reasoning) 흐름 제어
+멀티스텝 작업 오케스트레이션 (도구 호출, 계획, 분기)
+수많은 에이전트의 동시성(concurrency) 처리
+GPU·가속기 조율, 메모리/데이터 이동, 스케줄링
+즉 **"무거운 GEMM 한 방"이 아니라 "가벼운 작업 수만 개를 동시에 조율"**하는 성격입니다 (Arm 커뮤니티 블로그, 재구성함).
+
+왜 Graviton5가 여기에 딱 맞나
+칩당 192코어 — 대량 동시 작업(fan-out)에 이상적
+전력 효율 / 가격대성능 — 수천만 코어 규모에선 TCO가 전부
+높은 메모리 대역폭, 낮은 지연 — 조율·데이터 이동에 유리
+이건 전부 "코어 많고 싸고 효율적"이 이기는 싸움이지, "행렬곱 빠른 게" 이기는 싸움이 아닙니다.
+
+그래서 님 벤치와의 관계
+워크로드	병목	Graviton5 적합도
+문장 임베딩 (님이 잰 것)	행렬곱(GEMM) 집약	❌ 별로 (GPU/행렬가속 영역)
+agentic 오케스트레이션 (Meta)	동시성·조율·데이터이동	✅ 아주 좋음
+즉 님은 Graviton5가 가장 안 어울리는 워크로드로 테스트하신 겁니다. 임베딩은 행렬 연산 덩어리라 GPU나 행렬 가속기 영역이고, Meta가 Graviton으로 돌리는 건 그 위에서 에이전트들을 굴리고 조율하는 CPU 작업이에요. 실제로 업계 논조도 "훈련·무거운 행렬은 GPU, 추론·조율·프로덕션 운영은 CPU"로 역할을 나눕니다 (The Register, 재구성함).
+
+정리
+"왜 Meta가 Graviton을 agentic AI에 많이 쓰나?" → 행렬 연산이 빨라서가 아니라, 코어 많고(192) 효율 좋고 싸서 에이전트 오케스트레이션/추론 조율에 최적이기 때문. → 임베딩(행렬 집약)은 이 강점과 결이 다른 워크로드라, 님 벤치에서 감흥이 없던 게 당연.
+
+혹시 지금 만들고 계신 게 임베딩 파이프라인 자체가 목적인지, 아니면 그걸 포함한 에이전트 시스템이 목적인지 알려주시면 방향이 확 갈립니다. 임베딩 속도만 보면 c9g가 애매하지만, 에이전트 오케스트레이션 층까지 보면 c9g가 왜 각광받는지 딱 맞아떨어지거든요.
