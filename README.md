@@ -6,6 +6,7 @@
 ### 1. EC2 세션 매니저 설치 ###
 ```
 brew install --cask session-manager-plugin
+session-manager-plugin
 ```
 
 ### 2. 리전 조회 및 변경 ###
