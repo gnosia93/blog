@@ -61,7 +61,7 @@ aws iam get-instance-profile --instance-profile-name EC2-SSM-Profile
 ```
 aws ec2 describe-instance-type-offerings \
   --location-type region \
-  --filters "Name=instance-type,Values=c9g.2xlarge" \
+  --filters "Name=instance-type,Values=c9g.2xlarge"
 ```
 * 생성하기
 ```
