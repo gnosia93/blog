@@ -91,3 +91,11 @@ aws ec2 describe-instances \
 aws ssm start-session \
   --target i-0123456789abcdef0
 ```
+* 유저 전화 및 패키지 설치 
+```
+sudo su - ec2-user
+
+uname -m               
+cat /etc/os-release    
+sudo yum install -y git
+```
