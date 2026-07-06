@@ -2,6 +2,7 @@
 
 * C8i.2xlarge
 ```
+lscpu | grep amx
 
 ```
 
