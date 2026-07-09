@@ -139,3 +139,7 @@ Summary
   Tests : 143 passed
   Ready for Graviton (e.g., c7g/m7g/r7g) deployment.
 ```
+
+* 사람이 일일이 dependency:tree를 뒤져 ARM64 미지원 네이티브 라이브러리를 찾아내던 작업을 에이전트가 자동으로 식별
+* 순수 Java는 그대로 두고 차단 의존성만 교체 → 변경 최소화, 리스크 감소
+* 실제 ARM64에서 빌드/테스트까지 검증한 뒤 리포트 생성 → "며칠 단위" 전환의 실체
