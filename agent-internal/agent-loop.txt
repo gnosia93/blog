@@ -1,0 +1,243 @@
+좋아요. Python + Tool Runner로 갑니다. 우리 대화 주제에 딱 맞게, "기억으로 추측하지 말고 도구로
+  확인하는" 에이전트를 만들어볼게요 — 도구 2개 + 검증까지.
+
+  준비
+
+  pip install anthropic
+  export ANTHROPIC_API_KEY="sk-ant-..."
+
+  전체 예제
+
+  import anthropic
+  from anthropic import beta_tool
+
+  client = anthropic.Anthropic()  # ANTHROPIC_API_KEY 사용
+
+
+  # ── 손발 1: 실제 값을 조회하는 도구 ──────────────────
+  @beta_tool
+  def get_ec2_price(instance_type: str) -> str:
+      """AWS EC2 인스턴스의 시간당 온디맨드 가격을 조회한다.
+
+      Args:
+          instance_type: 인스턴스 타입, 예: g6.xlarge, g6e.xlarge
+      """
+      # 실제로는 여기서 AWS API나 pricing 페이지를 호출.
+      # 지금은 우리가 앞서 찾은 값을 하드코딩한 예시:
+      prices = {
+          "g6.xlarge": 0.80,
+          "g6e.xlarge": 1.86,
+          "mac2-m1ultra.metal": 5.00,
+      }
+      p = prices.get(instance_type)
+      if p is None:
+          return f"'{instance_type}' 가격 정보를 찾을 수 없음. 타입을 확인하세요."
+      return f"{instance_type}: 시간당 ${p:.2f} (us-east-1 온디맨드)"
+
+
+  # ── 손발 2: 계산 도구 (모델의 산수를 검증) ────────────
+  @beta_tool
+  def multiply(hourly: float, hours: float) -> str:
+      """시간당 가격과 시간 수를 곱해 총 비용을 계산한다.
+
+      Args:
+          hourly: 시간당 달러
+          hours: 시간 수
+      """
+      return f"${hourly * hours:.2f}"
+
+
+  # ── 두뇌 + 루프 ────────────────────────────────────
+  runner = client.beta.messages.tool_runner(
+      model="claude-opus-4-8",
+      max_tokens=16000,
+      tools=[get_ec2_price, multiply],
+      messages=[{
+          "role": "user",
+          "content": "g6e.xlarge를 48시간 돌리면 얼마야? 반드시 도구로 확인해서 계산해줘.",
+      }],
+  )
+
+  # runner를 순회하면 루프가 자동으로 돈다: 모델 → 도구 → 되먹임 → 반복
+  for message in runner:
+      for block in message.content:
+          if block.type == "text":
+              print(block.text)
+
+  실행하면 무슨 일이 일어나나
+
+  우리가 대화에서 그린 핑퐁이 그대로 돌아가요:
+
+  ① 두뇌: "가격을 알아야겠다" → get_ec2_price("g6e.xlarge") 호출
+  ② 손발: "$1.86" 반환
+  ③ 두뇌: "이제 48시간 곱하자" → multiply(1.86, 48) 호출   ← 산수도 추측 안 하고 검증
+  ④ 손발: "$89.28" 반환
+  ⑤ 두뇌: "g6e.xlarge를 48시간 돌리면 약 $89.28입니다" (최종 답)
+
+  모델이 도구를 더 안 부를 때까지 tool_runner가 알아서 반복하고, 마지막 메시지가 최종 답이에요.
+
+  핵심 포인트 3가지
+
+  1. 도구 정의 = 함수 + docstring. @beta_tool이 함수 시그니처와 docstring을 읽어 스키마를 자동
+  생성해요. 별도 JSON 스키마 안 짜도 됨. docstring이 곧 "이 도구를 언제 쓰는지" 설명서라 자세히 쓸수록
+  좋아요.
+  2. 루프를 손으로 안 짜도 됨. for message in runner: 한 줄이 아까 말한 "두뇌↔손발 핑퐁"을 전부
+  처리해요.
+  3. 이게 hallucination 방지의 실제 코드. multiply 도구를 넣은 이유 — 모델의 산수마저 "그럴듯한 추측"이
+  될 수 있으니 실행으로 검증하는 거예요. 우리가 계속 얘기한 그 원칙 그대로.
+
+  한 단계 더 (선택)
+
+  실무에서 자주 붙이는 것들:
+
+  - 한 번에 답 받기: 루프를 순회하는 대신 runner.until_done() 쓰면 최종 메시지만 반환
+  - 위험한 도구는 승인 게이트: 도구 함수 안에서 사용자에게 물어보고, 거절하면 "사용자가 거부함"을
+  결과로 반환 (예: 파일 삭제, 결제)
+  - 실제 조회로 교체: get_ec2_price 안을 WebFetch 대신 requests나 boto3로 바꾸면 진짜 실시간 값
+
+  ---
+  먼저 위 예제를 그대로 돌려보시겠어요? 아니면 get_ec2_price를 진짜 조회(boto3 또는 웹 호출)로 바꾸는
+  버전, 혹은 승인 게이트가 들어간 버전 중 어느 쪽을 더 보고 싶으세요?
+
+✻ Cogitated for 30s
+
+❯ tool runner 로 추사황 시켜놔서.. 이 내부를 봐야할 것 같은데. ㅎㅎ
+
+⏺ ㅎㅎ 맞아요, 추상화가 편하긴 한데 "안에서 뭐가 도는지" 안 보이면 답답하죠. tool_runner가 감춰둔
+  루프를 손으로 펼친 버전이 이거예요. 위 예제랑 결과는 똑같은데, 핑퐁이 코드로 다 보입니다.
+
+  수동 루프 — tool_runner의 속살
+
+  import anthropic
+
+  client = anthropic.Anthropic()
+
+  # ── 도구를 "실행하는 쪽" (손발) ──────────────────────
+  def get_ec2_price(instance_type: str) -> str:
+      prices = {"g6.xlarge": 0.80, "g6e.xlarge": 1.86, "mac2-m1ultra.metal": 5.00}
+      p = prices.get(instance_type)
+      return f"{instance_type}: 시간당 ${p:.2f}" if p else f"'{instance_type}' 못 찾음"
+
+  def multiply(hourly: float, hours: float) -> str:
+      return f"${hourly * hours:.2f}"
+
+  # 이름 → 함수 매핑 (모델이 부른 도구를 실제로 찾아 실행하려고)
+  TOOL_IMPLS = {"get_ec2_price": get_ec2_price, "multiply": multiply}
+
+  # ── 도구를 "설명하는 쪽" (스키마). @beta_tool이 자동 생성해주던 부분 ──
+  tools = [
+      {
+          "name": "get_ec2_price",
+          "description": "AWS EC2 인스턴스의 시간당 온디맨드 가격을 조회한다.",
+          "input_schema": {
+              "type": "object",
+              "properties": {"instance_type": {"type": "string", "description": "예: g6e.xlarge"}},
+              "required": ["instance_type"],
+          },
+      },
+      {
+          "name": "multiply",
+          "description": "시간당 가격과 시간 수를 곱해 총 비용을 계산한다.",
+          "input_schema": {
+              "type": "object",
+              "properties": {
+                  "hourly": {"type": "number"},
+                  "hours": {"type": "number"},
+              },
+              "required": ["hourly", "hours"],
+          },
+      },
+  ]
+
+  messages = [{
+      "role": "user",
+      "content": "g6e.xlarge를 48시간 돌리면 얼마야? 반드시 도구로 확인해서 계산해줘.",
+  }]
+
+  # ── 여기가 tool_runner가 숨기던 루프 그 자체 ──────────
+  while True:
+      response = client.messages.create(
+          model="claude-opus-4-8",
+          max_tokens=16000,
+          tools=tools,
+          messages=messages,
+      )
+
+      # ① 모델이 도구를 그만 부르면 종료
+      if response.stop_reason == "end_turn":
+          break
+
+      # ② 응답(도구 요청 포함)을 히스토리에 그대로 append — 이게 핵심
+      messages.append({"role": "assistant", "content": response.content})
+
+      # ③ 이번 턴에 요청된 도구들을 실제로 실행
+      tool_results = []
+      for block in response.content:
+          if block.type == "tool_use":
+              print(f"🔧 두뇌가 호출: {block.name}({block.input})")
+              impl = TOOL_IMPLS[block.name]        # 이름으로 함수 찾기
+              result = impl(**block.input)         # 실제 실행 = 손발
+              print(f"   ↳ 손발이 반환: {result}")
+              tool_results.append({
+                  "type": "tool_result",
+                  "tool_use_id": block.id,         # 어느 요청에 대한 답인지 매칭
+                  "content": result,
+              })
+
+      # ④ 결과를 user 메시지로 되먹임 → 루프 다시 돈다
+      messages.append({"role": "user", "content": tool_results})
+
+  # 최종 답
+  for block in response.content:
+      if block.type == "text":
+          print(f"\n💬 {block.text}")
+
+  tool_runner가 대신 해주던 4가지
+
+  번호가 위 코드 주석과 맞아요:
+
+  ┌────────────────┬──────────────────────────────────────────────────┬────────────────────────────┐
+  │      단계      │              수동 루프에서 하는 일               │      tool_runner에선       │
+  ├────────────────┼──────────────────────────────────────────────────┼────────────────────────────┤
+  │ ① 종료 판단    │ stop_reason == "end_turn" 체크                   │ 자동                       │
+  ├────────────────┼──────────────────────────────────────────────────┼────────────────────────────┤
+  │ ② 히스토리     │ 응답을 messages에 append (빼먹으면 도구 요청     │ 자동                       │
+  │ 관리           │ 유실)                                            │                            │
+  ├────────────────┼──────────────────────────────────────────────────┼────────────────────────────┤
+  │ ③ 도구         │ 이름→함수 매핑 + **block.input으로 실행          │ @beta_tool 함수를 자동     │
+  │ 디스패치       │                                                  │ 호출                       │
+  ├────────────────┼──────────────────────────────────────────────────┼────────────────────────────┤
+  │ ④ 결과 되먹임  │ tool_result + tool_use_id 매칭해서 user 턴에     │ 자동                       │
+  │                │ 넣기                                             │                            │
+  └────────────────┴──────────────────────────────────────────────────┴────────────────────────────┘
+
+  놓치기 쉬운 함정 3개 (직접 짜면 여기서 터짐)
+
+  1. tool_use_id 매칭 필수. 결과 블록마다 어느 요청(block.id)에 대한 답인지 안 붙이면 400 에러.
+  tool_runner는 이걸 자동으로 해줬어요.
+  2. 응답을 통째로 append (②). response.content에는 텍스트+tool_use 블록이 섞여 있는데, 텍스트만 뽑아
+  넣으면 도구 호출 기록이 사라져서 루프가 깨져요.
+  3. 한 턴에 여러 도구 → 결과를 한 user 메시지에 모아서. 모델이 get_ec2_price랑 multiply를 동시에 부를
+  수도 있는데, 결과는 한 번의 user 메시지에 리스트로 넣어야 해요. 쪼개면 병렬 호출이 망가집니다.
+
+  그래서 왜 tool_runner를 쓰냐면
+
+  보시다시피 루프 자체는 단순한데, ③④의 디테일(id 매칭, 히스토리, 병렬)에서 실수가 잦아요.
+  tool_runner는 이 보일러플레이트를 없애주는 거지 마법이 아니에요 — 방금 본 게 안에서 도는 전부입니다.
+
+  그런데 수동 루프의 진짜 가치는 "중간에 끼어들 수 있다"는 것이에요. 예를 들어 ③에서 도구 실행 직전에
+  사용자 승인을 받거나, 결과를 로깅하거나, 특정 도구를 막을 수 있죠.
+
+  ---
+  이 수동 루프에 뭘 더 끼워넣어 볼까요? 예를 들면:
+  - 위험한 도구 실행 전 승인 게이트 (③ 자리에)
+  - stop_reason이 pause_turn일 때 처리 (서버 도구 쓸 때 필요)
+  - 각 도구 호출을 로깅/추적
+
+  원하는 걸로 이 뼈대를 확장해드릴게요.
+
+✻ Baked for 35s
+
+※ recap: AWS GPU 인스턴스로 로컬 LLM을 돌리는 걸 알아보다가, Claude Agent를 직접 만드는 법으로 넘어와
+  Python Tool Runner의 내부 수동 루프까지 봤어요. 다음은 그 수동 루프에 승인 게이트나 로깅 같은 걸
+  끼워넣어 확장하는 겁니다.
