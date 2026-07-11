@@ -154,3 +154,7 @@ uname -m
 cat /etc/os-release    
 sudo yum install -y git
 ```
+
+
+## 레퍼런스 ##
+* 인스턴스 가격 조회 - https://instances.vantage.sh/aws/ec2/g6.xlarge?currency=USD
