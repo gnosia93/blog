@@ -106,10 +106,8 @@ SizeInMiB,GPU:GpuInfo.Gpus}" \
 
 #### 4. ⚠️ 쿼터(한도) 확인 — 이게 진짜 관건
 
-  "오퍼링은 있는데 막상 못 띄우는" 대부분의 이유는 vCPU 서비스 쿼터가 0이라서예요. G/VT
-  계열은 신규 계정에서 기본 한도가 0인 경우가 많습니다.
+오퍼링은 있는데 막상 못 띄우는 대부분의 이유는 vCPU 서비스 쿼터가 0 이어서이다. G/VT 계열은 신규 계정에서 기본 한도가 0인 경우가 많다.
 
-  # "Running On-Demand G and VT instances" vCPU 한도 조회
 ```
 aws service-quotas get-service-quota \
     --service-code ec2 \
@@ -117,10 +115,22 @@ aws service-quotas get-service-quota \
     --region ap-northeast-2 \
     --query "Quota.{Name:QuotaName,Limit:Value}" \
     --output table
-``` 
-- L-DB2E81BA = On-Demand G/VT 인스턴스 vCPU 한도 코드예요.
-- 값이 0이면 생성 불가 → 콘솔의 Service Quotas에서 증설 요청(request increase) 해야합니다.
-- g6e.xlarge는 4 vCPU라, 최소 4 이상의 한도가 필요해요.
+```
+- L-DB2E81BA = On-Demand G/VT 인스턴스 vCPU 한도 코드.
+- 값이 0이면 생성 불가 → 콘솔의 Service Quotas에서 증설 요청(request increase)
+- g6e.xlarge는 4 vCPU라, 최소 4 이상의 한도가 필요
+
+[결과]
+```
+---------------------------------------------------
+|                 GetServiceQuota                 |
++-------+-----------------------------------------+
+| Limit |                  Name                   |
++-------+-----------------------------------------+
+|  768.0|  Running On-Demand G and VT instances   |
++-------+-----------------------------------------+
+```
+
 
 #### 5. (선택) 실제 띄우기 전 안전 점검 — Dry Run
 
