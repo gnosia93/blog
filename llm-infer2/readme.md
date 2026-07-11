@@ -132,9 +132,32 @@ aws service-quotas get-service-quota \
 ```
 
 
-#### 5. (선택) 실제 띄우기 전 안전 점검 — Dry Run
+#### 5. EC2 생성 (Dry Run 포함)
 
-  진짜 생성 명령에 --dry-run을 붙이면 과금 없이 권한·가능 여부만 검사해요:
+default VPC 의 서브넷 정보를 조회한다. 
+```
+aws ec2 describe-subnets \
+    --region ap-northeast-2 \
+    --query "Subnets[].{Subnet:SubnetId,AZ:AvailabilityZone,VPC:VpcId,CIDR:CidrBlock}" \
+    --output table
+```
+[결과]
+```
+--------------------------------------------------------------------------------------------
+|                                      DescribeSubnets                                     |
++-----------------+-----------------+----------------------------+-------------------------+
+|       AZ        |      CIDR       |          Subnet            |           VPC           |
++-----------------+-----------------+----------------------------+-------------------------+
+|  ap-northeast-2c|  10.0.2.0/24    |  subnet-012f91835690f7a74  |  vpc-0fed4508ffc86da1b  |
+|  ap-northeast-2a|  10.0.0.0/24    |  subnet-0c680a185534f5237  |  vpc-0fed4508ffc86da1b  |
+|  ap-northeast-2c|  172.31.96.0/20 |  subnet-0f799b711e43b7433  |  vpc-0f154186c927b11bf  |
+|  ap-northeast-2d|  172.31.32.0/20 |  subnet-031ca0cb88349dbad  |  vpc-0f154186c927b11bf  |
+|  ap-northeast-2b|  172.31.0.0/20  |  subnet-05368250b0f90e41d  |  vpc-0f154186c927b11bf  |
+|  ap-northeast-2a|  172.31.16.0/20 |  subnet-048356825459e01fc  |  vpc-0f154186c927b11bf  |
++-----------------+-----------------+----------------------------+-------------------------+
+```
+
+AMI 를 조회한다.
 ```
 AMI=$(aws ec2 describe-images \
     --owners amazon \
@@ -144,13 +167,17 @@ AMI=$(aws ec2 describe-images \
     --output text \
     --region ap-northeast-2)
 echo "AMI: $AMI"
+```
 
+ec2 를 생성할 수 있는지 dry-run 을 실행한다.
+```
 aws ec2 run-instances \
     --instance-type g6e.xlarge \
     --image-id $AMI \
+    --subnet-id @subnet-조회된값@ \
     --dry-run \
     --region ap-northeast-2
-```  
+```
 → DryRunOperation이 뜨면 "실제로 실행하면 됐을 것"이라는 뜻(성공),
   UnauthorizedOperation이면 권한 문제입니다.
 
