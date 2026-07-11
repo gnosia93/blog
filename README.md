@@ -2,7 +2,7 @@
 
 * https://www.anyscale.com/blog/architecting-multimodal-data-pipelines-that-scale-with-ray
 
-## python ##
+## python - pipx ##
 ```bash
 brew install pipx
 pipx ensurepath
