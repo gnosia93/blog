@@ -8,6 +8,10 @@ brew install pipx
 pipx ensurepath
 ```
 pipx ensurepath는 pipx로 설치한 도구들이 터미널에서 바로 실행되도록 PATH에 등록해줍니다.
+```
+pipx install whichllm
+whichllm
+```
 
 
 ## EC2 ##
