@@ -1,14 +1,18 @@
-말씀하신 대로 유저 정보를 매핑할 **DB(여기서는 가볍게 DynamoDB)**가 필요하며, 브라우저와 API Gateway, 그리고 백엔드(ECS 대용 Mock)가 어떻게 맞물리는지 전체 코드를 보여드릴게요.
-1. 🗄️ DB 설계 (DynamoDB 테이블)
+유저 정보를 매핑할 **DB(여기서는 가볍게 DynamoDB)**가 필요하며, 브라우저와 API Gateway, 그리고 백엔드(ECS 대용 Mock)가 어떻게 맞물리는지 전체 코드이다.
+
+### 1. 🗄️ DB 설계 (DynamoDB 테이블)
 먼저 웹소켓 연결 관리를 위해 DynamoDB 테이블을 하나 생성해야 합니다.
 •	테이블 이름: websocket_connections
 •	파티션 키 (PK): connectionId (String)
-2. 🌐 AWS API Gateway 설정 (핵심 구조)
+
+### 2. 🌐 AWS API Gateway 설정 (핵심 구조)
 AWS 콘솔에서 API Gateway ➡️ WebSocket API를 생성할 때, 핵심 라우트(Route) 3개를 다음과 같이 설정하고 람다(Lambda) 함수와 연결합니다.
 	1.	$connect 라우트: 브라우저가 처음 들어올 때 실행 (DynamoDB에 ID 저장)
 	2.	$disconnect 라우트: 브라우저 창을 닫을 때 실행 (DynamoDB에서 ID 삭제)
 	3.	ping 라우트: 타임아웃을 막기 위한 핑퐁용 (단순 응답)
+
 🛠️ $connect 라우트 람다 소스코드 (Python)
+```
 import json
 import boto3
 
@@ -27,9 +31,11 @@ def lambda_handler(event, context):
     })
     
     return {'statusCode': 200, 'body': 'Connected'}
+```
 
-3. 💻 웹 브라우저 (Frontend - HTML/JS)
+### 3. 💻 웹 브라우저 (Frontend - HTML/JS)
 10분 타임아웃을 막기 위한 핑퐁(Heartbeat) 로직이 포함된 순수 자바스크립트 웹 브라우저 코드입니다.
+```
 <!DOCTYPE html>
 <html lang="ko">
 <head><title>WebSocket Client</title></head>
@@ -66,9 +72,11 @@ def lambda_handler(event, context):
     </script>
 </body>
 </html>
+```
 
-4. 🚀 백엔드 가상 워커 (ECS Mock URL 역역할 코드)
+### 4. 🚀 백엔드 가상 워커 (ECS Mock URL 역역할 코드)
 AI 에이전트 작업이 완전히 끝나서, 웹소켓 연결과 무관한 외부 프로세스가 API Gateway에게 "얘한테 알림 쏴줘!"라고 때리는 파이썬 코드입니다.
+```
 import boto3
 import json
 
@@ -101,6 +109,6 @@ def mock_ecs_task_finished():
 
 # 가상 실행
 mock_ecs_task_finished()
-
+```
 🧐 흐름 정리
 브라우저가 wss://로 접속하면 람다가 DynamoDB에 소켓 주소(connectionId)를 적어두고, 3분마다 브라우저가 Ping을 날려 타임아웃을 방어합니다. 이후 무거운 작업을 끝낸 ECS Mock 코드가 boto3 라이브러리로 API Gateway의 문을 두드려 유저에게 알림을 성공적으로 배달하게 됩니다!
